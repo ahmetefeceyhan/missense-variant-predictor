@@ -1,0 +1,16 @@
+# Buyuk ham veri seti (786MB) - ClinVar/OpenCRAVAT'tan yeniden uretilebilir,
+# GitHub LFS kotasini doldurdugu icin git'e konmaz.
+data/63k_genis/full_cravat_v3_63k.csv
+
+# TEKNOFEST yarisma verisi - organizatorun sagladigi veri, paylasim izni
+# belirsiz oldugu icin repoya konmaz (kod/notebook/bulgular korunur).
+data/real_data/*.csv
+
+# Isletim sistemi / gecici dosyalar
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+*.pyc
+catboost_info/
+**/catboost_info/

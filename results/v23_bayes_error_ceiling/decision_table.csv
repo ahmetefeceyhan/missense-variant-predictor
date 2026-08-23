@@ -1,0 +1,5 @@
+Panel,Gap,Decision,Confidence,Note
+MASTER,0.0161,DUR (at ceiling),HIGH,
+KANSER,-0.0037,DUR (at ceiling),HIGH,
+PAH,0.1125,DEVAM (significant margin),HIGH,
+CFTR,-0.1080,DUR (at ceiling),LOW,"n_benign=21, genis CI"

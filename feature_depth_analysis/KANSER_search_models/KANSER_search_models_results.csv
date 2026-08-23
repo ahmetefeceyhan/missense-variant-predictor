@@ -1,0 +1,6 @@
+panel,model_family,n_features,feature_set,cv_best_f1,test_accuracy,test_f1,test_recall,test_precision,best_params
+KANSER,XGBoost,10,xgb_importance top-10,0.9184,0.859,0.9043,0.963,0.8525,"{""max_depth"": 3, ""learning_rate"": 0.05, ""scale_pos_weight"": 1}"
+KANSER,CatBoost,10,xgb_importance top-10,0.9187,0.859,0.9027,0.9444,0.8644,"{""depth"": 6, ""learning_rate"": 0.1}"
+KANSER,LightGBM,10,xgb_importance top-10,0.9028,0.8462,0.8947,0.9444,0.85,"{""num_leaves"": 15, ""learning_rate"": 0.05, ""scale_pos_weight"": 0.4485981308411215}"
+KANSER,NN,10,xgb_importance top-10,0.8787,0.8333,0.8889,0.963,0.8254,"{""mlp__hidden_layer_sizes"": [32], ""mlp__alpha"": 0.001}"
+KANSER,DNN,10,xgb_importance top-10,0.8809,0.7949,0.8545,0.8704,0.8393,"{""mlp__hidden_layer_sizes"": [64, 32], ""mlp__alpha"": 0.001}"

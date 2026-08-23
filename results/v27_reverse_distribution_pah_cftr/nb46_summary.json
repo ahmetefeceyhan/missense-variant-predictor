@@ -1,0 +1,30 @@
+{
+  "notebook": "NB46",
+  "date": "2026-07-27",
+  "hypothesis": "Reverse-distribution PAH ve CFTR'ye yayilimi",
+  "pah": {
+    "floor_f1": 0.908284023668639,
+    "reference_champion": {
+      "name": "P4_COMBINED_BalBag_NB21",
+      "boot_f1": 0.582
+    },
+    "best_reverse_dist": {
+      "name": "R1_REVERSE_6040/lgbm",
+      "boot_f1": 0.5889,
+      "delta_vs_reference": 0.006900000000000017
+    }
+  },
+  "cftr": {
+    "floor_f1": 0.8955223880597014,
+    "reference_champion": {
+      "name": "S0c_PriorShift_NB20",
+      "boot_f1": 0.863
+    },
+    "best_reverse_dist": {
+      "name": "R2_REVERSE_7030/lgbm",
+      "boot_f1": 0.8377,
+      "delta_vs_reference": -0.02529999999999999
+    },
+    "caveat": "n=21 benign -- dusuk guven, CI genis"
+  }
+}

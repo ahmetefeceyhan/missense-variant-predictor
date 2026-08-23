@@ -1,0 +1,4 @@
+panel,method,threshold,train_f1,train_mcc,f1_5050,f1_boot_8020,f1_boot_std,mcc,precision,recall,tn,fp,fn,tp,overfit_gap
+CFTR,Baseline_LightGBM_M3,0.69,0.979,0.9269,0.8916,0.7248,0.1159,0.6128,0.9737,0.8222,19,2,16,74,0.0875
+CFTR,D1_NoiseAware_Weight,0.85,0.9554,0.8582,0.8642,0.6965,0.1299,0.56,0.9722,0.7778,19,2,20,70,0.0912
+CFTR,D3_FS_Top100,0.66,0.9798,0.9293,0.9048,0.7489,0.0847,0.642,0.9744,0.8444,19,2,14,76,0.075

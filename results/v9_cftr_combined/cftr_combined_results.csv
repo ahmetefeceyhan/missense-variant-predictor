@@ -1,0 +1,3 @@
+strategy,n_train,pi_train,mcc_raw,mcc_prior,f1_raw,f1_prior,auc,boot_mean,boot_std,train_f1,train_mcc
+S0_MASTER-only,2931,0.7332,0.6271,0.6552,0.8982,0.9186,0.9423,0.6915,0.0877,0.9786,0.9269
+S0c_COMBINED,3691,0.7388,0.6436,0.6436,0.882,0.882,0.9339,0.8629,0.1327,0.9715,0.9034

@@ -1,0 +1,8 @@
+Metric,Value
+best_arm,no_fe_robust
+thr_f1_8020(no_fe_dahil),0.6200
+F1_5050(no_fe_dahil),0.8321
+F1_8020(no_fe_dahil),0.5776
+FE_delta,+0.0077
+robust_delta,+0.0114
+max_is_missing_FI%,0.9

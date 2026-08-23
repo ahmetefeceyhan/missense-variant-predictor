@@ -1,0 +1,6 @@
+panel,model_family,n_features,feature_set,cv_best_f1,test_accuracy,test_f1,test_recall,test_precision,best_params
+PAH,XGBoost,1,literal report best (1 feat),0.9081,0.8267,0.9051,1.0,0.8267,"{""max_depth"": 3, ""learning_rate"": 0.05, ""scale_pos_weight"": 1}"
+PAH,LightGBM,1,literal report best (1 feat),0.9101,0.8267,0.9051,1.0,0.8267,"{""num_leaves"": 15, ""learning_rate"": 0.05, ""scale_pos_weight"": 1}"
+PAH,CatBoost,1,literal report best (1 feat),0.906,0.8267,0.9051,1.0,0.8267,"{""depth"": 4, ""learning_rate"": 0.05}"
+PAH,NN,1,literal report best (1 feat),0.9101,0.8267,0.9051,1.0,0.8267,"{""mlp__hidden_layer_sizes"": [32], ""mlp__alpha"": 0.0001}"
+PAH,DNN,1,literal report best (1 feat),0.9101,0.8267,0.9051,1.0,0.8267,"{""mlp__hidden_layer_sizes"": [64, 32], ""mlp__alpha"": 0.0001}"

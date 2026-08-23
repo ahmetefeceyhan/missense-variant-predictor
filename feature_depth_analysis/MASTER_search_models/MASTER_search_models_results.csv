@@ -1,0 +1,6 @@
+panel,model_family,n_features,feature_set,cv_best_f1,test_accuracy,test_f1,test_recall,test_precision,best_params
+MASTER,CatBoost,200,xgb_importance top-200,0.8882,0.833,0.8921,0.9419,0.8473,"{""depth"": 6, ""learning_rate"": 0.1}"
+MASTER,LightGBM,200,xgb_importance top-200,0.8861,0.8296,0.8899,0.9395,0.8452,"{""num_leaves"": 15, ""learning_rate"": 0.05, ""scale_pos_weight"": 1}"
+MASTER,XGBoost,200,xgb_importance top-200,0.8812,0.8211,0.8847,0.9372,0.8378,"{""max_depth"": 3, ""learning_rate"": 0.05, ""scale_pos_weight"": 1}"
+MASTER,NN,200,xgb_importance top-200,0.8496,0.7888,0.8619,0.9,0.8269,"{""mlp__hidden_layer_sizes"": [64], ""mlp__alpha"": 0.0001}"
+MASTER,DNN,200,xgb_importance top-200,0.84,0.7581,0.8408,0.8721,0.8117,"{""mlp__hidden_layer_sizes"": [64, 32], ""mlp__alpha"": 0.001}"

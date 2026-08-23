@@ -1,0 +1,4 @@
+strategy,thr_single,thr_robust,mcc_single,mcc_robust,boot_single,boot_robust,prec_robust,rec_robust,TN_robust,FP_robust,FN_robust,TP_robust
+S0_MASTER,0.08,0.1896,0.6552,0.5243,0.6915,0.6456,0.971,0.7444,19,2,23,67
+S0c_COMBINED,0.15,0.1474,0.6436,0.6436,0.8629,0.8629,1.0,0.7889,21,0,19,71
+Ensemble,0.18,0.1694,0.5961,0.5835,0.8221,0.7497,0.9857,0.7667,20,1,21,69

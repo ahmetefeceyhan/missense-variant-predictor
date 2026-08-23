@@ -1,0 +1,7 @@
+Senaryo,Model,n_features,n_mask,cv_f1,f1,auc_roc,mcc,recall,precision
+Baseline_nomask,XGBoost,280,0,0.8876,0.8985,0.8474,0.56,0.9674,0.8387
+Baseline_nomask,LightGBM,280,0,0.8859,0.8973,0.8344,0.5547,0.9651,0.8384
++Mask_all,XGBoost,460,180,0.8911,0.8974,0.8451,0.5484,0.986,0.8233
++Mask_all,LightGBM,460,180,0.885,0.8966,0.8291,0.5551,0.9581,0.8425
++Mask_highrisk,XGBoost,280,0,0.8876,0.8985,0.8474,0.56,0.9674,0.8387
++Mask_highrisk,LightGBM,280,0,0.8859,0.8973,0.8344,0.5547,0.9651,0.8384
