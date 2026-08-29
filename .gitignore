@@ -2,6 +2,10 @@
 # GitHub LFS kotasini doldurdugu icin git'e konmaz.
 data/63k_genis/full_cravat_v3_63k.csv
 
+# NB50'nin urettigi turetilmis parquet'ler (~370MB toplam) - ham CSV'den
+# notebooks/50_63k_prep_eda.ipynb calistirilarak yeniden uretilebilir.
+data/63k_genis/*.parquet
+
 # TEKNOFEST yarisma verisi - organizatorun sagladigi veri, paylasim izni
 # belirsiz oldugu icin repoya konmaz (kod/notebook/bulgular korunur).
 data/real_data/*.csv

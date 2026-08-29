@@ -2135,4 +2135,32 @@ Değerlendirme protokolü NB32/NB39/NB46 ile birebir aynı: f1_raw / f1_8020 / m
 
 **Yol haritası etkisi:** Yol haritası deney #4 tamamlandı — ama negatif sonuç yerine **yeni bir aktif eksen** doğurdu: M5/native_nan'ın gerçek champion reçeteleriyle (tam hiperparametre sadakatiyle) doğrulanması. Kalan açık eksenler: madde 4-doğrulama (M5 vs M3, gerçek champion modeliyle — yeni), madde 6 (Venn-Abers kalibrasyon + calibrate-then-shift), madde 7 (MASTER'da reverse-pool base'leriyle heterojen stacking + Optuna).
 
+---
+
+## NB50 — 63k Genis Veri: Hazirlama, Etiketleme, Sizinti Temizligi, EDA (2026-08-29) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 1. Kullanıcının **"final test dağılımı diye bir şey olmayacak, sadece model eğiteceğiz elimizdeki veri ile"** kararı üzerine başlayan rejim değişikliğinin ilk adımı: `data/63k_genis/full_cravat_v3_63k.csv` (824 MB, 63.463 satır, 777 sütun, **legacy** OpenCRAVAT şeması) dosyasını temiz, etiketli, sızıntısız parquet'e çevirmek ve EDA yapmak. Bu, projedeki NB12–NB48 arası tüm çalışmanın dayandığı "final test %80 benign" varsayımının terk edildiği ilk yeni-rejim notebook'u.
+
+**Yeni modül:** `src/columns_63k.py` — 63k'ya özgü sızıntı listeleri (`CLINVAR_LEAK_COLS`, `ID_TEXT_TRANSCRIPT_COLS`, `LEAKY_META_PREDICTOR_SCORES/PREDS`), etiket türetim fonksiyonları (`derive_label`, `derive_label_confidence`, `is_qualified_label`), tip ayrıştırma (`classify_columns`) ve `floor_f1()` yardımcısı. `src/columns_real.py::get_constant_cols()` / `get_duplicate_col_pairs()` şema-agnostik oldukları için doğrudan yeniden kullanıldı (CLAUDE.md'nin öngördüğü gibi).
+
+**Uygulanan adımlar (plan §Adım1.1–1.7 birebir):**
+1. Chunked (`chunksize=5000`) CSV→parquet dönüşümü. **Tuzak:** chunk sınırları arası dtype tutarsızlığı (`clinvar__dbsnp_id` gibi bazı sütunlar bir chunk'ta sayısal, diğerinde string) `pyarrow.Table.from_pandas` hatası verdi — çözüm: `category`'ye çevirmeden önce `.astype(str)` ile normalize etmek.
+2. Etiket türetimi: `clinvar__sig` prefix eşleşmesiyle Label (0/1), `clinvar__rev_stat`'tan `label_conf` güven ağırlığı, `|other` gibi ek nitelikli etiketler için `Label_qualified` bayrağı. 11 satır belirsiz etiket (`Conflicting`/NaN) dışlandı.
+3. Missense filtresi (`base__so=='MIS'`): 60.970 satır ana sete, 2.482 non-missense satır ayrı parquet'e (`nonmis_63k.parquet`, ADIM 4 ek-veri ablasyonu için).
+4. Sızıntı temizliği: tüm `clinvar__*`/`clinvar_acmg__*` (40 sütun) + ID/serbest-metin/transkript sütunları (161 sütun, CHASMplus'ın 32 kanser-alt-tipi transcript/all çiftleri dahil) drop edildi. `LEAKY_META_PREDICTOR_SCORES/PREDS` (27+6 sütun) **drop edilmedi, ayrı listede tutuldu** (ADIM 3 A6 ablasyonu için). 777 → 611 sütun.
+5. Constant+duplicate temizliği (`columns_real` fonksiyonları, şema-agnostik): 70 sabit + 3 özdeş çift → 611 → 538 sütun.
+6. Tip ayrıştırma: NUMERIC/CATEGORICAL/BINARY (`*__pred`/`*__class` kategorik sayıldı).
+7. EDA.
+
+**Doğrulanan sayılar (bu oturumda önceden ölçülenle birebir tutarlı):** missense n=60.970, benign=38.248/pathogenic=22.722, **prevalans=0.3727, floor-F1=0.543** — eski yarışma MASTER panelinin floor'u (0.846) ile karşılaştırıldığında **modelin gösterecek gerçek marjı olduğunu** doğruluyor.
+
+**Yeni EDA bulguları:**
+- **Eksiklik MNAR, hem de eski veriden daha güçlü:** ortalama eksiklik %38.0 (eski MASTER'ın %55'inden düşük), ama eksiklik×Label phi-korelasyonu 124 sütunda |phi|>0.1 — en güçlüleri `gnomad3__af*`/`thousandgenomes__*` ailesi (phi≈0.75). Eksiklik kesinlikle bilgi taşıyor, MCAR değil.
+- **Gen-ezberi riski somut ve büyük:** top-50 gen tablosunda 15 gen tek-yönlü (prevalans>0.95 veya <0.05) — `FLG`/`KMT2C`/`OBSCN` %0 patojenik (n=122–144), `PAH`/`CFTR`/`LDLR`/`GLA` >%95 patojenik. **GroupKFold(groups=base__hugo) olmadan yapılan her değerlendirme güvenilmez.**
+- **Tek-değişkenli AUC>0.95: 30 sütun** — incelemede bunların **sızıntı değil, ya ayrı-tutulan meta-predictor'lar** (`revel__score`, `alphamissense__am_pathogenicity`, `metarnn__score` — zaten A6 ablasyon listesinde) **ya da meşru popülasyon-frekansı sinyali** (`gnomad__af`, `gnomad4__af` — nadir varyant→patojenik biyolojik olarak beklenen ilişki) olduğu görüldü. NB51'de kesin karar verilecek ama ilk bulgu "kırmızı bayrak = otomatik sızıntı" değil.
+
+**Çıktılar:** `data/63k_genis/{full_63k,missense_63k,nonmis_63k}.parquet`, `src/columns_63k.py`, `results/v31_63k_prep/` (nb50_summary.json, nb50_column_lists.json, nb50_gene_table_top50.csv, nb50_univariate_auc.csv, nb50_vs_yarisma_comparison.csv), `reports/nb50_63k_eda_report.pdf`, `notebooks/50_63k_prep_eda.ipynb`.
+
+**Sonraki adım:** ADIM 2 — NB51 (`notebooks/51_63k_leakage_audit.ipynb`): hızlı sinyal testi (LGBM, CV F1>0.97 kırmızı bayrak), tek-sütun AUC'un 30 kırmızı-bayraklı sütununu elle sınıflandırma (meta-predictor vs meşru vs gerçek sızıntı), meta-predictor A6 ablasyon ön-hazırlığı, gen-ezberi testi (GroupKFold vs StratifiedKFold farkı), duplicate satır kontrolü.
+
 

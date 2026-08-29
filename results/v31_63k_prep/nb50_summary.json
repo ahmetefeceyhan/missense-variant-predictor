@@ -1,0 +1,16 @@
+{
+  "n_total_labeled": 63452,
+  "n_missense": 60970,
+  "n_nonmissense": 2482,
+  "n_excluded_label": 11,
+  "n_cols_after_leak_cleanup": 611,
+  "n_constant_cols_dropped": 70,
+  "n_duplicate_cols_dropped": 3,
+  "n_cols_final": 538,
+  "prevalence_patho": 0.3727,
+  "floor_f1": 0.543,
+  "n_meta_predictor_score_cols_retained_separately": 27,
+  "n_columns_auc_gt_095": 30,
+  "mean_missing_pct": 0.3799,
+  "n_strong_mnar_cols_phi_gt_01": 124
+}
