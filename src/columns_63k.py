@@ -134,11 +134,42 @@ LEAKY_META_PREDICTOR_SCORES = [
     'revel__score',
     'alphamissense__am_pathogenicity',
     'bayesdel__bayesdel_addAF_score', 'bayesdel__bayesdel_noAF_score',
+    # VARITY / VEST -- dbNSFP ailesi, ClinVar uzerinde egitilmis diger meta-predictor'lar
+    'varity_r__varity_r', 'varity_r__varity_er',
+    'varity_r__varity_r_loo', 'varity_r__varity_er_loo',
+    'vest__score', 'vest__pval',
+]
+
+# *__rankscore / *_rank_score -- dbNSFP'nin yukaridaki meta-predictor skorlarinin
+# 0-1 normalize edilmis siralama versiyonu. Ayni sizinti riskini tasir (NB51'de
+# CV F1'i 0.99'a tasiyan feature'larin buyuk kismi bu aileden cikti), bu yuzden
+# skor listesine DEGIL ayri bir listeye konuyor -- filtrelemesi kolay olsun diye.
+LEAKY_META_PREDICTOR_RANKSCORES = [
+    'bayesdel__bayesdel_addAF_rankscore', 'bayesdel__bayesdel_noAF_rankscore',
+    'clinpred__rankscore', 'cscape_coding__rankscore',
+    'dann_coding__dann_rankscore', 'esm1b__rankscore', 'eve__rank_score',
+    'fathmm_mkl__fathmm_mkl_coding_rankscore', 'fathmm_xf_coding__fathmm_xf_coding_rankscore',
+    'fitcons__fitcons_coding_rankscore', 'genocanyon__rankscore',
+    'gmvp__rank_score', 'lrt__lrt_converted_rankscore', 'metalr__rankscore',
+    'metarnn__rank_score', 'metasvm__rankscore', 'mutation_assessor__rankscore',
+    'mutationtaster__rankscore', 'mutpred1__mutpred_rankscore', 'mutpred2__rankscore',
+    'primateai__primateai_rankscore', 'provean__rankscore', 'revel__rankscore',
+    'sift__rankscore',
 ]
 
 LEAKY_META_PREDICTOR_PREDS = [
     'aloft__pred', 'metalr__pred', 'metarnn__pred', 'metasvm__pred', 'mistic__pred',
     'alphamissense__am_class',
+]
+
+# ID sutunlari -- NB50'nin ID_TEXT_TRANSCRIPT_COLS listesinde gozden kacmis,
+# NB51 feature-importance taramasinda yakalandi (mupit__hugo, omim__omim_id
+# top-30da cikti). Literatur-referans sayisi da dolayli sizinti riski tasir:
+# ClinVar'a giren varyantlar zaten literaturde daha cok bahsedilme egilimindedir.
+NB51_ADDITIONAL_ID_LEAK_COLS = [
+    'mupit__hugo',            # base__hugo'nun tekrari, ID/kategorik degil gen adi
+    'omim__omim_id',          # OMIM kayit ID'si
+    'litvar_full__rsid', 'litvar_full__reference_count', 'litvar_full__pmids',
 ]
 
 # ============================================================================

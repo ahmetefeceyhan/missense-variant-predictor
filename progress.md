@@ -2163,4 +2163,37 @@ Değerlendirme protokolü NB32/NB39/NB46 ile birebir aynı: f1_raw / f1_8020 / m
 
 **Sonraki adım:** ADIM 2 — NB51 (`notebooks/51_63k_leakage_audit.ipynb`): hızlı sinyal testi (LGBM, CV F1>0.97 kırmızı bayrak), tek-sütun AUC'un 30 kırmızı-bayraklı sütununu elle sınıflandırma (meta-predictor vs meşru vs gerçek sızıntı), meta-predictor A6 ablasyon ön-hazırlığı, gen-ezberi testi (GroupKFold vs StratifiedKFold farkı), duplicate satır kontrolü.
 
+**Güncelleme (NB51 sonrası):** NB51'in sızıntı denetimi, NB50'nin ilk sızıntı listesinin **eksik** olduğunu ortaya çıkardı — `src/columns_63k.py` ve NB50 Cell 5 buna göre güncellenip parquet'ler yeniden üretildi (bkz. NB51 bölümü aşağıda). Bu bölümdeki sayılar (606/533 sütun, meta=33) güncel/nihai değerlerdir.
+
+---
+
+## NB51 — 63k Genis Veri: Sizinti Denetimi & Saglamlik Kontrolu (2026-08-29) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 2. NB50'nin ürettiği `missense_63k.parquet`'i (sızıntı-temiz olduğu iddia edilen) 5 kontrolden geçirmek: hızlı sinyal testi, tek-sütun AUC taraması, meta-predictor ablasyonu, gen-ezberi testi, duplicate satır kontrolü.
+
+**🔴 İlk çalıştırmada NB50'nin sızıntı listesi eksik çıktı (iteratif sızıntı avının tam beklenen sonucu):**
+- `*__rankscore`/`*_rank_score` ailesi (dbNSFP'nin meta-predictor skorlarının normalize sıralama versiyonu — 23 sütun) `LEAKY_META_PREDICTOR_SCORES`'ta yoktu.
+- `varity_r__*` (VARITY) ve `vest__*` (VEST) meta-predictor'ları da eksikti.
+- `mupit__hugo`, `omim__omim_id`, `litvar_full__rsid/reference_count/pmids` gibi ID/literatür-referans sütunları `ID_TEXT_TRANSCRIPT_COLS`'ta yoktu — özellikle `litvar_full__reference_count` (bir varyantın literatürde kaç kez geçtiği) **dolaylı sızıntı riski** taşıyor çünkü ClinVar'a giren varyantlar zaten literatürde daha çok bahsedilme eğiliminde.
+- **Düzeltme:** `src/columns_63k.py`'a `LEAKY_META_PREDICTOR_RANKSCORES` (23 sütun) eklendi, `LEAKY_META_PREDICTOR_SCORES`'a varity_r/vest (6 sütun) eklendi, `NB51_ADDITIONAL_ID_LEAK_COLS` (5 sütun) yeni liste olarak eklendi. NB50 Cell 5 bu listeleri dahil edecek şekilde güncellendi, parquet'ler yeniden üretildi (606→533 sütun, önceki 611→538'den 5 sütun daha az).
+
+**Sonuçlar (güncel parquet üzerinde, meta-predictor score+rankscore+pred hepsi ayrı tutularak):**
+
+| Kontrol | Sonuç | Karar |
+|---|---|---|
+| **1. Hızlı sinyal (tüm feature, meta dahil)** | CV F1=0.9899, AUC=0.9996 | **Kırmızı bayrak tetiklendi** (F1>0.97) |
+| **1b. Meta TAMAMEN hariç** | CV F1=0.9878, AUC=0.9994 | Kırmızı bayrağın kaynağı meta-predictor **DEĞİL** — fark sadece 0.0021 |
+| **2. Tek-sütun AUC>0.95 (30 sütun) sınıflandırma** | meta_predictor=23, population_freq=4, functional_assay=2, **UNKNOWN_INVESTIGATE=1** (`cardioboost__arrhythmias`) | 29/30 meşru kategoriye düştü; `cardioboost__arrhythmias` aritmi-geni-özel bir risk anotasyonu, muhtemelen meşru ama dar kapsamlı — NB52'de izlenecek |
+| **3. Meta-predictor ablasyonu (A6 ön-hazırlık)** | F1 farkı = 0.0021 (dahil−hariç) | **Sınırlı katkı** (<0.05 eşiği) — meta-predictor dahil etmek düşük riskli, A6'da yine de doğrulanacak |
+| **4. Gen-ezberi testi (GroupKFold vs StratifiedKFold)** | F1 farkı = 0.0056 (7.207 benzersiz gen) | **Belirgin değil** (<0.10 eşiği) — ama gen-holdout her tabloda raporlanmaya devam edecek |
+| **5. Duplicate satır kontrolü** | 18 tam kopya varyant, **0 çelişkili etiket** | Temiz — hiçbir kopya grup içinde Label çelişmiyor |
+
+**⭐ En önemli bulgu — kırmızı bayrağın kaynağı sızıntı değil, verinin doğal kalitesi:** Meta-predictor'lar (score+rankscore+pred, toplam 33+24+6 sütun) tamamen çıkarılsa bile CV F1 hâlâ 0.9878 — yani ~0.99'luk skor tek bir sütun grubundan gelmiyor. Muhtemel açıklama: 63k'nın açık-isimli, klinik-kalite annotasyonları (REVEL, AlphaMissense, gnomAD frekansı, konservasyon skorları) tek başlarına bile çok güçlü ayırt ediciler — bu, yarışmanın anonimleştirilmiş/gürültülü AL_ sütunlarından temelden farklı bir veri rejimi. **Uyarı:** bu aynı zamanda modelin REVEL/AlphaMissense'e göre gerçek katma değerinin düşük kalabileceği anlamına gelir — NB52'nin A4 (feature selection) ve A6 (meta-predictor ablasyonu) adımlarında netleştirilecek.
+
+**Genel verdict: İNCELEME GEREKLİ ama kritik sızıntı bulunamadı** — kırmızı bayrak veri kalitesinden kaynaklanıyor, meta-predictor/gen-ezberi/duplicate testlerinin hiçbiri patoloji göstermedi. `cardioboost__arrhythmias` tek açık soru işareti, ablasyonla izlenecek.
+
+**Çıktılar:** `results/v32_63k_audit/` (nb51_summary.json, nb51_feature_importance.csv, nb51_high_auc_classification.csv, nb51_meta_ablation.json, nb51_gene_memorization.json, nb51_duplicate_rows.json), `reports/nb51_leakage_audit.pdf`, `notebooks/51_63k_leakage_audit.ipynb`. Ayrıca NB50 çıktıları güncellendi: `src/columns_63k.py`, `data/63k_genis/{full_63k,missense_63k,nonmis_63k}.parquet`, `results/v31_63k_prep/*`, `reports/nb50_63k_eda_report.pdf`.
+
+**Sonraki adım:** ADIM 3 — NB52 (`notebooks/52_63k_baseline_hypotheses.ipynb`): H1–H8 hipotez ablasyonları (A1 model ailesi, A2 missing stratejisi, A3 sınıf dengeleme, A4 feature seti/top-200, A5 etiket kalitesi, A6 meta-predictor dahil/hariç — bu notebook'un bulgusuna göre düşük riskli ama yine de test edilecek, A7 feature engineering). Test seti hâlâ açılmadı; tüm kararlar 5-fold CV'den.
+
 

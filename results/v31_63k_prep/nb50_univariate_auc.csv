@@ -193,8 +193,8 @@ allofus250k__gvs_mid_ac,0.7415995009599294
 gnomad4__nhomalt_rem,0.7402717281310771
 chasmplus_SKCM__pval,0.739517349736138
 chasmplus_SKCM__score,0.7395173353395337
-phastcons__phastcons470_mamm_r,0.7383926108288277
 phastcons__phastcons470_mamm,0.7383926108288277
+phastcons__phastcons470_mamm_r,0.7383926108288277
 chasmplus_LUAD__score,0.7345747639359401
 chasmplus_LUAD__pval,0.7345745318626766
 chasmplus_ESCA__score,0.7332288967943984
@@ -298,7 +298,6 @@ alfa_latin_american__latin2_alt,0.5768041577213964
 alfa_latin_american__latin2_freq,0.5767987941112533
 alfa_latin_american__latin1_freq,0.5728483487184879
 alfa_latin_american__latin1_alt,0.5728295982833607
-litvar_full__reference_count,0.5679003828126414
 allofus250k__gvs_all_an,0.5668731723172307
 gnomad4__an_amr,0.5660724263703
 gnomad4__nhomalt_ami,0.5652352102637206

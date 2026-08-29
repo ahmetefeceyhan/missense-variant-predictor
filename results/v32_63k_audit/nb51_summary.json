@@ -1,0 +1,12 @@
+{
+  "cv_f1_all_features_incl_meta": 0.9899463898955363,
+  "cv_auc_all_features_incl_meta": 0.9995508741553346,
+  "red_flag_quick_signal": true,
+  "n_high_auc_gt_095": 30,
+  "n_high_auc_unknown_investigate": 1,
+  "meta_ablation_f1_delta": 0.0021476100316153435,
+  "gene_memorization_gap": 0.0055510337295848755,
+  "n_duplicate_rows": 18,
+  "n_conflicting_label_groups": 0,
+  "floor_f1": 0.5429909668785546
+}
