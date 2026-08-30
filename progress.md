@@ -2196,4 +2196,49 @@ Değerlendirme protokolü NB32/NB39/NB46 ile birebir aynı: f1_raw / f1_8020 / m
 
 **Sonraki adım:** ADIM 3 — NB52 (`notebooks/52_63k_baseline_hypotheses.ipynb`): H1–H8 hipotez ablasyonları (A1 model ailesi, A2 missing stratejisi, A3 sınıf dengeleme, A4 feature seti/top-200, A5 etiket kalitesi, A6 meta-predictor dahil/hariç — bu notebook'un bulgusuna göre düşük riskli ama yine de test edilecek, A7 feature engineering). Test seti hâlâ açılmadı; tüm kararlar 5-fold CV'den.
 
+---
+
+## NB52 — 63k Genis Veri: Baseline & Hipotez Ablasyonlari H1-H8 (2026-08-30) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 3 — planın en yüksek getirili adımı. Eski projenin (NB12-NB48, anonim yarışma verisi) H1-H8 hipotezlerinin 63k'ya (legacy, açık isimli, büyük n, düşük floor) taşınıp taşınmadığını tek-eksen ardışık ablasyon (A1→A7, her adımda önceki kazanan sabitlenir) ile test etmek.
+
+**Veri:** n=60970 missense varyant, prevalans=0.3727, floor-F1=0.5430 (yarışma panellerinden çok daha düşük — 63k'nın karakteristik özelliği).
+
+**A1-A7 sonuçları (kazanan zincirinin cv_f1 ilerlemesi):**
+
+| Eksen | Kazanan | cv_f1 | Not |
+|---|---|---|---|
+| A1 (model ailesi) | **lgbm** | 0.9897 | BalancedBagging (0.9882) ve diğer ağaçlar çok yakın; CatBoost en yavaş (505s) |
+| A1+H8 (SmallMLP) | lgbm > mlp | mlp=0.9836 | NN rekabetçi ama ağaçları geçemedi |
+| A2 (missing) | **native_nan** | 0.9900 | Impute yapmamak (LGBM native NaN) flag/median stratejilerinden daha iyi |
+| A3 (dengeleme) | **scale_pos_weight** | 0.9903 | Gerçek-resample (0.9891) en kötüsü — veri israfı büyük n'de zararlı |
+| A4 (feature seti) | **top200 (xgb-importance)** | 0.9904 | top100 ve all-features'tan iyi, ayrıca 54s→32s hızlanma |
+| A5 (etiket kalitesi) | all_labels | 0.9904 | qualified/weighted/expert-only farklı n'de, doğrudan kıyaslanamaz — bilgi amaçlı |
+| A6 (meta-predictor) | with_meta (dahil) | 0.9904 vs 0.9867 (hariç) | Fark 0.0038 — NB51 ön-bulgusuyla tutarlı, düşük risk |
+| A7 (FE: Grantham/BLOSUM62/fizikokimya) | no_fe | 0.9904 vs 0.9897 (with_fe) | FE nötr (-0.0007) |
+
+**H1-H8 taşınma karnesi:**
+
+| Hipotez | Sonuç |
+|---|---|
+| H1 (BalancedBagging en güçlü) | **ÇÜRÜTÜLDÜ** — düz LGBM kazandı |
+| H2 (M5≥M3 missing stratejisi) | **ÇÜRÜTÜLDÜ/DEĞİŞTİ** — `native_nan` ikisini de geçti |
+| H3 (gerçek resample > class_weight) | **ÇÜRÜTÜLDÜ/DEĞİŞTİ** — `scale_pos_weight` en iyisi |
+| H6 (FE panel-bağımlı) | **NÖTR** |
+| H7 (feature selection kazandırır) | **DOĞRULANDI** |
+| H8 (NN artık rekabetçi) | **DOĞRULANDI** (0.9836 vs 0.9897, fark<0.01) |
+| H4 (meta=LR, GBM değil) / H5 (heterojen base korelasyon<0.85) | NB53'e ertelendi (stacking aşaması) |
+
+**⭐ En önemli bulgu — 63k, yarışma verisinden köklü şekilde farklı bir rejimde:** Yarışma panellerinde (NB16-NB39) kazanan H1/H2/H3 reçetesi (BalancedBagging + missing-flag + gerçek-resample) burada üçü de tersine döndü. Sebep: n=60970 (yarışma panellerinin ~20 katı) + çok güçlü açık-isimli meta-predictor'lar (REVEL, AlphaMissense, gnomAD frekansı) sayesinde sinyal zaten çok güçlü (floor=0.543, model=0.99) — büyük n'de düz LGBM+scale_pos_weight zaten dengesizliği yönetiyor, native NaN handling zaten optimal, gerçek-resample ise veri israfına dönüşüyor. **Yarışma verisi (küçük n, anonim, zayıf sinyal) ile 63k (büyük n, açık, güçlü sinyal) arasında reçete transferi yapılamaz** — her ikisi kendi rejiminde ayrı ayrı optimize edilmeli.
+
+**Champion reçete (NB53 başlangıç noktası):** LGBM + native_nan + scale_pos_weight + top200 feature (xgb-importance) + meta-predictor dahil + no_fe → cv_f1=0.9904, cv_mcc=0.9848, gene-holdout f1=0.9886.
+
+**🐛 Smoke test sırasında bulunan iki macOS-spesifik native crash (asıl notebook'a da uygulandı):**
+1. `BalancedBaggingClassifier(n_jobs=-1)` + iç içe `LGBMClassifier` paralelliği → joblib/loky deadlock (süreç %0 CPU'da sonsuza kadar askıda kalıyor, hata mesajı bile vermiyor). Düzeltme: hem dış hem iç estimator için `n_jobs=1`.
+2. `torch`'un NumPy/PyArrow/LightGBM'den **sonra** import edilmesi → `torch.tensor()` çağrısında SIGSEGV (exit 139), stack trace'de `pyarrow.lib`/`numpy.linalg` modüllerinin çift yüklendiği görüldü (OpenMP/BLAS init sırası çakışması). Düzeltme: `torch`'u dosyanın en başına taşı + `KMP_DUPLICATE_LIB_OK=TRUE`. Bu iki hata, önceki oturumdaki "smoke test 120s'de takıldı" gözleminin kök nedeniydi.
+
+**Çıktılar:** `results/v33_63k_baseline/` (nb52_ablation_results.csv, nb52_hypothesis_scorecard.json, nb52_champion_recipe.json, nb52_champion_feature_list.json, nb52_ablation_progress.png), `reports/nb52_baseline_report.pdf`, `notebooks/52_63k_baseline_hypotheses.ipynb`. `src/columns_63k.py`'a Section 9 eklendi: `compute_achange_fe()` — `base__achange` metninden ('p.Arg220Gln') Grantham/BLOSUM62/delta-hidropati/hacim/pI/yük türetimi (A7 için).
+
+**Sonraki adım:** ADIM 4 — NB53 (`notebooks/53_63k_optimization.ipynb`): Champion reçeteye Optuna (TRIALS_TREE=100/TRIALS_NN=50), stacking (H4: LR vs GBM meta, H5: heterojen base pairwise korelasyon<0.85), kalibrasyon (Platt/Isotonic/Venn-Abers + ECE), threshold finalizasyonu (F1-max vs MCC-max), non-missense ek-veri ablasyonu. Test seti hâlâ açılmadı.
+
 
