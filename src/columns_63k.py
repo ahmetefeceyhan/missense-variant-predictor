@@ -8,6 +8,10 @@ DIKKAT: Bu dosya calistirilarak degil, notebooks/50_63k_prep_eda.ipynb tarafinda
 elle dogrulanan sutun listelerinin donduruldugu yerdir. Yeni bir CRAVAT surumu
 gelirse (farklı annotator seti) bu listeler NB50'de yeniden kontrol edilmelidir.
 """
+import re as _re
+
+import numpy as np
+import pandas as pd
 
 # ============================================================================
 # 1. ETIKET KAYNAGI VE GRUP/SPLIT ANAHTARLARI (feature DEGIL)
@@ -279,3 +283,121 @@ def is_qualified_label(sig_value):
 def floor_f1(prevalence):
     """Trivial 'hep pathogenic de' baseline F1'i: 2p/(1+p)."""
     return 2 * prevalence / (1 + prevalence)
+
+
+# ============================================================================
+# 9. base__achange FE (NB52 A7) -- 63k'da ref_amino/alt_amino onceden turetilmis
+# gelmiyor (legacy CSV'nin aksine), bu yuzden 'p.Arg220Gln' formatindan sifirdan
+# cikariyoruz. Grantham/BLOSUM62 tablolari icin src/features.py'daki GRANTHAM/
+# BLOSUM62 sozlukleri (tek-harf AA kodlu) YENIDEN KULLANILIYOR.
+# ============================================================================
+_AA_3TO1 = {
+    'Ala': 'A', 'Arg': 'R', 'Asn': 'N', 'Asp': 'D', 'Cys': 'C', 'Gln': 'Q',
+    'Glu': 'E', 'Gly': 'G', 'His': 'H', 'Ile': 'I', 'Leu': 'L', 'Lys': 'K',
+    'Met': 'M', 'Phe': 'F', 'Pro': 'P', 'Ser': 'S', 'Thr': 'T', 'Trp': 'W',
+    'Tyr': 'Y', 'Val': 'V', 'Ter': '*', 'Sec': 'U', 'Pyl': 'O', 'Xaa': 'X',
+}
+
+_ACHANGE_RE = _re.compile(r'^p\.([A-Za-z]{3})(\d+)([A-Za-z]{3}|=|\*)$')
+
+# Kyte-Doolittle hydropathy, molar volume (A^3), pI, net charge (fizyolojik pH)
+_AA_HYDROPATHY = {
+    'A': 1.8, 'R': -4.5, 'N': -3.5, 'D': -3.5, 'C': 2.5, 'Q': -3.5, 'E': -3.5,
+    'G': -0.4, 'H': -3.2, 'I': 4.5, 'L': 3.8, 'K': -3.9, 'M': 1.9, 'F': 2.8,
+    'P': -1.6, 'S': -0.8, 'T': -0.7, 'W': -0.9, 'Y': -1.3, 'V': 4.2,
+}
+_AA_VOLUME = {
+    'A': 88.6, 'R': 173.4, 'N': 114.1, 'D': 111.1, 'C': 108.5, 'Q': 143.8,
+    'E': 138.4, 'G': 60.1, 'H': 153.2, 'I': 166.7, 'L': 166.7, 'K': 168.6,
+    'M': 162.9, 'F': 189.9, 'P': 112.7, 'S': 89.0, 'T': 116.1, 'W': 227.8,
+    'Y': 193.6, 'V': 140.0,
+}
+_AA_PI = {
+    'A': 6.00, 'R': 10.76, 'N': 5.41, 'D': 2.77, 'C': 5.07, 'Q': 5.65,
+    'E': 3.22, 'G': 5.97, 'H': 7.59, 'I': 6.02, 'L': 5.98, 'K': 9.74,
+    'M': 5.74, 'F': 5.48, 'P': 6.30, 'S': 5.68, 'T': 5.60, 'W': 5.89,
+    'Y': 5.66, 'V': 5.96,
+}
+_AA_CHARGE = {  # fizyolojik pH'ta net yuk
+    'D': -1, 'E': -1, 'K': 1, 'R': 1, 'H': 0,  # H notr yakinsa da genelde 0 alinir
+}
+
+
+def parse_achange(achange):
+    """
+    'p.Arg220Gln' -> ('R', 220, 'Q'). Stopgain ('p.Arg220*'), sessiz ('p.Arg220=')
+    veya format-disi girdilerde (None, None, None) doner.
+    """
+    if not isinstance(achange, str):
+        return (None, None, None)
+    m = _ACHANGE_RE.match(achange.strip())
+    if not m:
+        return (None, None, None)
+    ref3, pos, alt3 = m.groups()
+    ref1 = _AA_3TO1.get(ref3)
+    pos = int(pos)
+    if alt3 == '=':
+        alt1 = ref1
+    elif alt3 == '*':
+        alt1 = '*'
+    else:
+        alt1 = _AA_3TO1.get(alt3)
+    return (ref1, pos, alt1)
+
+
+def compute_achange_fe(achange_series, grantham_table, blosum62_table):
+    """
+    base__achange serisinden FE DataFrame'i uretir:
+    ref_amino, alt_amino, aa_pos, grantham, blosum62,
+    delta_hydropathy, delta_volume, delta_pi, delta_charge,
+    is_stopgain, is_synonymous.
+
+    grantham_table / blosum62_table: src.features.GRANTHAM / BLOSUM62 (tek-harf AA kodlu dict).
+    """
+    parsed = achange_series.astype(str).apply(parse_achange)
+    ref_amino = parsed.apply(lambda t: t[0])
+    aa_pos = parsed.apply(lambda t: t[1])
+    alt_amino = parsed.apply(lambda t: t[2])
+
+    is_stopgain = (alt_amino == '*').astype(int)
+    is_synonymous = (ref_amino == alt_amino).astype(int)
+
+    def _lookup(ref, alt, table):
+        if ref is None or alt is None or ref == '*' or alt == '*':
+            return np.nan
+        return table.get((ref, alt), np.nan)
+
+    grantham = pd.Series(
+        [_lookup(r, a, grantham_table) for r, a in zip(ref_amino, alt_amino)],
+        index=achange_series.index,
+    )
+    blosum62 = pd.Series(
+        [_lookup(r, a, blosum62_table) for r, a in zip(ref_amino, alt_amino)],
+        index=achange_series.index,
+    )
+
+    def _delta(prop_table):
+        vals = []
+        for r, a in zip(ref_amino, alt_amino):
+            if r in prop_table and a in prop_table:
+                vals.append(prop_table[a] - prop_table[r])
+            else:
+                vals.append(np.nan)
+        return pd.Series(vals, index=achange_series.index)
+
+    return pd.DataFrame({
+        'ref_amino': ref_amino,
+        'alt_amino': alt_amino,
+        'aa_pos': aa_pos,
+        'grantham': grantham,
+        'blosum62': blosum62,
+        'delta_hydropathy': _delta(_AA_HYDROPATHY),
+        'delta_volume': _delta(_AA_VOLUME),
+        'delta_pi': _delta(_AA_PI),
+        'delta_charge': pd.Series(
+            [_AA_CHARGE.get(a, 0) - _AA_CHARGE.get(r, 0) for r, a in zip(ref_amino, alt_amino)],
+            index=achange_series.index,
+        ),
+        'is_stopgain': is_stopgain,
+        'is_synonymous': is_synonymous,
+    })

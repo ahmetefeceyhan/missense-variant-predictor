@@ -1,0 +1,13 @@
+{
+  "model_family": "lgbm",
+  "missing_strategy": "native_nan",
+  "class_balancing": "scale_pos_weight",
+  "feature_set": "top200",
+  "n_features_final": 200,
+  "meta_predictor": "included",
+  "feature_engineering": "no_fe",
+  "cv_f1_final": 0.9897314680635603,
+  "cv_mcc_final": 0.9836250853305865,
+  "genegroup_f1_final": 0.9880247747119002,
+  "floor_f1": 0.5429909668785546
+}
