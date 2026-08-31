@@ -2239,6 +2239,32 @@ Değerlendirme protokolü NB32/NB39/NB46 ile birebir aynı: f1_raw / f1_8020 / m
 
 **Çıktılar:** `results/v33_63k_baseline/` (nb52_ablation_results.csv, nb52_hypothesis_scorecard.json, nb52_champion_recipe.json, nb52_champion_feature_list.json, nb52_ablation_progress.png), `reports/nb52_baseline_report.pdf`, `notebooks/52_63k_baseline_hypotheses.ipynb`. `src/columns_63k.py`'a Section 9 eklendi: `compute_achange_fe()` — `base__achange` metninden ('p.Arg220Gln') Grantham/BLOSUM62/delta-hidropati/hacim/pI/yük türetimi (A7 için).
 
-**Sonraki adım:** ADIM 4 — NB53 (`notebooks/53_63k_optimization.ipynb`): Champion reçeteye Optuna (TRIALS_TREE=100/TRIALS_NN=50), stacking (H4: LR vs GBM meta, H5: heterojen base pairwise korelasyon<0.85), kalibrasyon (Platt/Isotonic/Venn-Abers + ECE), threshold finalizasyonu (F1-max vs MCC-max), non-missense ek-veri ablasyonu. Test seti hâlâ açılmadı.
+**Sonraki adım (tamamlandı):** ADIM 4 — NB53 (`notebooks/53_63k_optimization.ipynb`): Champion reçeteye Optuna (TRIALS_TREE=100/TRIALS_NN=50), stacking (H4: LR vs GBM meta, H5: heterojen base pairwise korelasyon<0.85), kalibrasyon (Platt/Isotonic/Venn-Abers + ECE), threshold finalizasyonu (F1-max vs MCC-max), non-missense ek-veri ablasyonu. Test seti hâlâ açılmadı.
+
+## NB53 — 63k Genis Veri: Optimizasyon, Ensemble, Kalibrasyon (2026-08-30) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 4. NB52'nin champion reçetesini (LGBM + native_nan + scale_pos_weight + top200 feature + meta-predictor dahil + no_fe, cv_f1=0.9904/0.9897) başlangıç alıp Optuna, stacking (H4/H5), kalibrasyon, threshold finalizasyonu ve non-missense ek-veri ablasyonu ile geliştirmek. Test seti hâlâ açılmadı — tüm kararlar 5-fold stratified CV'den.
+
+**1. Optuna (TRIALS_TREE=100, config.py'dan, 3336.7s):** LGBM hiperparametre araması. En iyi CV F1=0.9907 (NB52 champion 0.9897'ye göre **+0.0010**). En iyi parametreler: num_leaves=150, max_depth=4, learning_rate=0.1146, n_estimators=488, min_child_samples=75, subsample=0.857, colsample_bytree=0.634. Marjinal ama pozitif kazanç.
+
+**2. Stacking — H4/H5 testi:** 5 base model (Optuna-LGBM, XGBoost, CatBoost, RandomForest, BalancedBagging) OOF tahminleriyle meta-matris kuruldu.
+- **H5 (heterojen base korelasyon<0.85) → ÇÜRÜTÜLDÜ.** Maksimum pairwise korelasyon **0.9988** — tüm base modeller neredeyse birebir aynı tahminleri üretiyor (63k'daki güçlü meta-predictor sinyali her aileyi aynı karar sınırına yakınsatıyor).
+- **H4 (meta=GBM, meta=LR'yi geçecek) → ÇÜRÜTÜLDÜ.** Meta=LR cv_f1=0.9900, Meta=GBM cv_f1=0.9906, ama tek başına en iyi base (lgbm_optuna=0.9907) ikisini de geçti. Stacking kazancı = **-0.0001** (değersiz). NB16-39'daki "meta=LR yeterli" bulgusu burada da tutarlı, ama esas sonuç: **63k'da stacking'in kendisi gereksiz** (base'ler arası çeşitlilik yok).
+
+**3. Kalibrasyon (Platt/Isotonic, Venn-Abers kapsam dışı — paket kurulu değil):** Isotonic en iyi (ECE 0.0045→**0.0005**, Brier 0.0059→0.0056). Model zaten iyi kalibreydi (ham ECE=0.0045 çok düşük); kalibrasyon marjinal iyileştirme sağladı, kritik bir sorunu çözmedi.
+
+**4. Threshold finalizasyonu:** F1-max ve MCC-max **aynı noktada birleşti (thr=0.46)** → F1=0.9907, MCC=0.9852. Gerekçe: 63k'da (yarışma verisinin aksine) bilinen bir ters-dağılım beyanı yok, train ve final test aynı prevalansta bekleniyor — bu yüzden F1-max seçildi, MCC-max yalnızca çapraz-kontrol.
+
+**5. Non-missense ek-veri ablasyonu:** `nonmis_63k.parquet` (n=2482, frameshift/stopgain vb.) eklendiğinde ortak 200/200 feature ile cv_f1 0.9907→**0.9890 (-0.0017)**. Karar: **NÖTR/hafif zararlı, dahil edilmedi**.
+
+**⭐ En önemli bulgu — 63k rejiminde "ensemble teknikleri" tavan doldurulduğunda değersizleşiyor:** NB52'de zaten görülen "yarışma reçetesi 63k'ya transfer olmuz" bulgusunun devamı: stacking, kalibrasyon-ötesi düzeltme ve ek veri gibi yarışma panellerinde (küçük n, zayıf sinyal) kazanç sağlayan teknikler burada (büyük n, çok güçlü açık-isimli meta-predictor sinyali, cv_f1≈0.99) hiçbir şey katmıyor — çünkü kazanç sağlamaları için gereken ön koşullar (base model çeşitliliği, kalibrasyon bozukluğu, ek sinyal) burada yok. Tek gerçek kazanç kaynağı Optuna oldu (+0.0010), o da marjinal.
+
+**Champion reçete v2 (final, NB54'e taşınacak):** LGBM + Optuna params + native_nan + scale_pos_weight + top200 feature + meta-predictor dahil + no_fe, **stacking kullanılmıyor** (tekli LGBM kazandı), kalibrasyon=isotonic, threshold=0.46 (f1max), non-missense **dahil değil**. **Final CV F1 = 0.9907**, floor-F1=0.5430.
+
+**H4/H5 karnesi:** H4 (meta=LR, GBM değil) → **LR YETERLİ/ÜSTÜN** (eski bulgu tutarlı). H5 (heterojen base korelasyon<0.85) → **ÇÜRÜTÜLDÜ** (homojen, 0.9988).
+
+**Çıktılar:** `results/v34_63k_optimization/` (nb53_optuna_best_params.json, nb53_base_correlation.csv, nb53_oof_matrix.parquet, nb53_optimization_results.csv, nb53_champion_recipe_v2.json, nb53_hypothesis_scorecard.json, nb53_optimization_progress.png), `reports/nb53_optimization_report.pdf`, `notebooks/53_63k_optimization.ipynb`.
+
+**Sonraki adım:** ADIM 5 — NB54 (`notebooks/54_63k_final.ipynb`): Test seti **ilk ve son kez** burada açılır. Final metrikler (hold-out + floor + confusion matrix), CV-test farkı raporu (protokol dürüstlüğü), gen-holdout final skoru, model/artifact kaydı (`models/v31_63k/`).
 
 

@@ -1,0 +1,28 @@
+{
+  "model_family": "lgbm",
+  "optuna_params": {
+    "num_leaves": 150,
+    "max_depth": 4,
+    "learning_rate": 0.11455183364566728,
+    "n_estimators": 488,
+    "min_child_samples": 75,
+    "subsample": 0.8566043114169304,
+    "colsample_bytree": 0.6341508096539421,
+    "reg_alpha": 7.450048837777351e-08,
+    "reg_lambda": 0.012235743786081084
+  },
+  "optuna_cv_f1": 0.9907003864181835,
+  "stacking_used": false,
+  "stacking_meta": null,
+  "max_pairwise_base_corr": 0.9987925210233531,
+  "calibration_method": "isotonic",
+  "ece_before": 0.004512223747696455,
+  "ece_after": 0.0005040174122324336,
+  "final_threshold": 0.45999999999999985,
+  "threshold_strategy": "f1max",
+  "threshold_reason": "F1-max secildi: 63k icin (yarisma verisinin aksine) bilinen bir ters-dagilim beyani yok, train ve degerlendirme ayni prevalansta kaliyor; MCC-max capraz-kontrol.",
+  "nonmissense_included": false,
+  "nonmissense_delta": -0.0016920400377115064,
+  "final_cv_f1": 0.9907002308453337,
+  "floor_f1": 0.5429909668785546
+}
