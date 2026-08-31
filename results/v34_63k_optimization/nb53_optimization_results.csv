@@ -1,0 +1,9 @@
+name,cv_f1,note
+B1_optuna_lgbm,0.9907003864181835,100 trials
+B2_stacking_lr,0.9899593540591014,meta=LR
+B2_stacking_gbm,0.9905979526382848,meta=GBM
+B3_calibration,0.9907010486051573,"isotonic, ece=0.0005"
+B4_threshold_f1max,0.9907252747252747,thr=0.46
+B4_threshold_mccmax,0.9907252747252747,"thr=0.46, mcc=0.9852"
+B5_missense_only,0.9907002308453337,200 ortak feature
+B5_combined_nonmis,0.9890081908076221,n=63452

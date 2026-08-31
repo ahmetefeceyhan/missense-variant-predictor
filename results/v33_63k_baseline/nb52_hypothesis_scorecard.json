@@ -1,0 +1,10 @@
+{
+  "H1_balbag_strongest": "CURUTULDU",
+  "H2_m5_gte_m3": "CURUTULDU/DEGISTI",
+  "H3_real_resample_gt_classweight": "CURUTULDU/DEGISTI",
+  "H4_meta_lr_not_gbm": "NB53de test edilecek (stacking asamasi)",
+  "H5_heterogeneous_base_corr_lt_085": "NB53de test edilecek (stacking asamasi)",
+  "H6_fe_panel_dependent": "FE NOTR",
+  "H7_feature_selection_helps": "DOGRULANDI",
+  "H8_nn_competitive_at_scale": "DOGRULANDI (NN rekabetci)"
+}

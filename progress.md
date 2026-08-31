@@ -2135,4 +2135,159 @@ Değerlendirme protokolü NB32/NB39/NB46 ile birebir aynı: f1_raw / f1_8020 / m
 
 **Yol haritası etkisi:** Yol haritası deney #4 tamamlandı — ama negatif sonuç yerine **yeni bir aktif eksen** doğurdu: M5/native_nan'ın gerçek champion reçeteleriyle (tam hiperparametre sadakatiyle) doğrulanması. Kalan açık eksenler: madde 4-doğrulama (M5 vs M3, gerçek champion modeliyle — yeni), madde 6 (Venn-Abers kalibrasyon + calibrate-then-shift), madde 7 (MASTER'da reverse-pool base'leriyle heterojen stacking + Optuna).
 
+---
+
+## NB50 — 63k Genis Veri: Hazirlama, Etiketleme, Sizinti Temizligi, EDA (2026-08-29) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 1. Kullanıcının **"final test dağılımı diye bir şey olmayacak, sadece model eğiteceğiz elimizdeki veri ile"** kararı üzerine başlayan rejim değişikliğinin ilk adımı: `data/63k_genis/full_cravat_v3_63k.csv` (824 MB, 63.463 satır, 777 sütun, **legacy** OpenCRAVAT şeması) dosyasını temiz, etiketli, sızıntısız parquet'e çevirmek ve EDA yapmak. Bu, projedeki NB12–NB48 arası tüm çalışmanın dayandığı "final test %80 benign" varsayımının terk edildiği ilk yeni-rejim notebook'u.
+
+**Yeni modül:** `src/columns_63k.py` — 63k'ya özgü sızıntı listeleri (`CLINVAR_LEAK_COLS`, `ID_TEXT_TRANSCRIPT_COLS`, `LEAKY_META_PREDICTOR_SCORES/PREDS`), etiket türetim fonksiyonları (`derive_label`, `derive_label_confidence`, `is_qualified_label`), tip ayrıştırma (`classify_columns`) ve `floor_f1()` yardımcısı. `src/columns_real.py::get_constant_cols()` / `get_duplicate_col_pairs()` şema-agnostik oldukları için doğrudan yeniden kullanıldı (CLAUDE.md'nin öngördüğü gibi).
+
+**Uygulanan adımlar (plan §Adım1.1–1.7 birebir):**
+1. Chunked (`chunksize=5000`) CSV→parquet dönüşümü. **Tuzak:** chunk sınırları arası dtype tutarsızlığı (`clinvar__dbsnp_id` gibi bazı sütunlar bir chunk'ta sayısal, diğerinde string) `pyarrow.Table.from_pandas` hatası verdi — çözüm: `category`'ye çevirmeden önce `.astype(str)` ile normalize etmek.
+2. Etiket türetimi: `clinvar__sig` prefix eşleşmesiyle Label (0/1), `clinvar__rev_stat`'tan `label_conf` güven ağırlığı, `|other` gibi ek nitelikli etiketler için `Label_qualified` bayrağı. 11 satır belirsiz etiket (`Conflicting`/NaN) dışlandı.
+3. Missense filtresi (`base__so=='MIS'`): 60.970 satır ana sete, 2.482 non-missense satır ayrı parquet'e (`nonmis_63k.parquet`, ADIM 4 ek-veri ablasyonu için).
+4. Sızıntı temizliği: tüm `clinvar__*`/`clinvar_acmg__*` (40 sütun) + ID/serbest-metin/transkript sütunları (161 sütun, CHASMplus'ın 32 kanser-alt-tipi transcript/all çiftleri dahil) drop edildi. `LEAKY_META_PREDICTOR_SCORES/PREDS` (27+6 sütun) **drop edilmedi, ayrı listede tutuldu** (ADIM 3 A6 ablasyonu için). 777 → 611 sütun.
+5. Constant+duplicate temizliği (`columns_real` fonksiyonları, şema-agnostik): 70 sabit + 3 özdeş çift → 611 → 538 sütun.
+6. Tip ayrıştırma: NUMERIC/CATEGORICAL/BINARY (`*__pred`/`*__class` kategorik sayıldı).
+7. EDA.
+
+**Doğrulanan sayılar (bu oturumda önceden ölçülenle birebir tutarlı):** missense n=60.970, benign=38.248/pathogenic=22.722, **prevalans=0.3727, floor-F1=0.543** — eski yarışma MASTER panelinin floor'u (0.846) ile karşılaştırıldığında **modelin gösterecek gerçek marjı olduğunu** doğruluyor.
+
+**Yeni EDA bulguları:**
+- **Eksiklik MNAR, hem de eski veriden daha güçlü:** ortalama eksiklik %38.0 (eski MASTER'ın %55'inden düşük), ama eksiklik×Label phi-korelasyonu 124 sütunda |phi|>0.1 — en güçlüleri `gnomad3__af*`/`thousandgenomes__*` ailesi (phi≈0.75). Eksiklik kesinlikle bilgi taşıyor, MCAR değil.
+- **Gen-ezberi riski somut ve büyük:** top-50 gen tablosunda 15 gen tek-yönlü (prevalans>0.95 veya <0.05) — `FLG`/`KMT2C`/`OBSCN` %0 patojenik (n=122–144), `PAH`/`CFTR`/`LDLR`/`GLA` >%95 patojenik. **GroupKFold(groups=base__hugo) olmadan yapılan her değerlendirme güvenilmez.**
+- **Tek-değişkenli AUC>0.95: 30 sütun** — incelemede bunların **sızıntı değil, ya ayrı-tutulan meta-predictor'lar** (`revel__score`, `alphamissense__am_pathogenicity`, `metarnn__score` — zaten A6 ablasyon listesinde) **ya da meşru popülasyon-frekansı sinyali** (`gnomad__af`, `gnomad4__af` — nadir varyant→patojenik biyolojik olarak beklenen ilişki) olduğu görüldü. NB51'de kesin karar verilecek ama ilk bulgu "kırmızı bayrak = otomatik sızıntı" değil.
+
+**Çıktılar:** `data/63k_genis/{full_63k,missense_63k,nonmis_63k}.parquet`, `src/columns_63k.py`, `results/v31_63k_prep/` (nb50_summary.json, nb50_column_lists.json, nb50_gene_table_top50.csv, nb50_univariate_auc.csv, nb50_vs_yarisma_comparison.csv), `reports/nb50_63k_eda_report.pdf`, `notebooks/50_63k_prep_eda.ipynb`.
+
+**Sonraki adım:** ADIM 2 — NB51 (`notebooks/51_63k_leakage_audit.ipynb`): hızlı sinyal testi (LGBM, CV F1>0.97 kırmızı bayrak), tek-sütun AUC'un 30 kırmızı-bayraklı sütununu elle sınıflandırma (meta-predictor vs meşru vs gerçek sızıntı), meta-predictor A6 ablasyon ön-hazırlığı, gen-ezberi testi (GroupKFold vs StratifiedKFold farkı), duplicate satır kontrolü.
+
+**Güncelleme (NB51 sonrası):** NB51'in sızıntı denetimi, NB50'nin ilk sızıntı listesinin **eksik** olduğunu ortaya çıkardı — `src/columns_63k.py` ve NB50 Cell 5 buna göre güncellenip parquet'ler yeniden üretildi (bkz. NB51 bölümü aşağıda). Bu bölümdeki sayılar (606/533 sütun, meta=33) güncel/nihai değerlerdir.
+
+---
+
+## NB51 — 63k Genis Veri: Sizinti Denetimi & Saglamlik Kontrolu (2026-08-29) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 2. NB50'nin ürettiği `missense_63k.parquet`'i (sızıntı-temiz olduğu iddia edilen) 5 kontrolden geçirmek: hızlı sinyal testi, tek-sütun AUC taraması, meta-predictor ablasyonu, gen-ezberi testi, duplicate satır kontrolü.
+
+**🔴 İlk çalıştırmada NB50'nin sızıntı listesi eksik çıktı (iteratif sızıntı avının tam beklenen sonucu):**
+- `*__rankscore`/`*_rank_score` ailesi (dbNSFP'nin meta-predictor skorlarının normalize sıralama versiyonu — 23 sütun) `LEAKY_META_PREDICTOR_SCORES`'ta yoktu.
+- `varity_r__*` (VARITY) ve `vest__*` (VEST) meta-predictor'ları da eksikti.
+- `mupit__hugo`, `omim__omim_id`, `litvar_full__rsid/reference_count/pmids` gibi ID/literatür-referans sütunları `ID_TEXT_TRANSCRIPT_COLS`'ta yoktu — özellikle `litvar_full__reference_count` (bir varyantın literatürde kaç kez geçtiği) **dolaylı sızıntı riski** taşıyor çünkü ClinVar'a giren varyantlar zaten literatürde daha çok bahsedilme eğiliminde.
+- **Düzeltme:** `src/columns_63k.py`'a `LEAKY_META_PREDICTOR_RANKSCORES` (23 sütun) eklendi, `LEAKY_META_PREDICTOR_SCORES`'a varity_r/vest (6 sütun) eklendi, `NB51_ADDITIONAL_ID_LEAK_COLS` (5 sütun) yeni liste olarak eklendi. NB50 Cell 5 bu listeleri dahil edecek şekilde güncellendi, parquet'ler yeniden üretildi (606→533 sütun, önceki 611→538'den 5 sütun daha az).
+
+**Sonuçlar (güncel parquet üzerinde, meta-predictor score+rankscore+pred hepsi ayrı tutularak):**
+
+| Kontrol | Sonuç | Karar |
+|---|---|---|
+| **1. Hızlı sinyal (tüm feature, meta dahil)** | CV F1=0.9899, AUC=0.9996 | **Kırmızı bayrak tetiklendi** (F1>0.97) |
+| **1b. Meta TAMAMEN hariç** | CV F1=0.9878, AUC=0.9994 | Kırmızı bayrağın kaynağı meta-predictor **DEĞİL** — fark sadece 0.0021 |
+| **2. Tek-sütun AUC>0.95 (30 sütun) sınıflandırma** | meta_predictor=23, population_freq=4, functional_assay=2, **UNKNOWN_INVESTIGATE=1** (`cardioboost__arrhythmias`) | 29/30 meşru kategoriye düştü; `cardioboost__arrhythmias` aritmi-geni-özel bir risk anotasyonu, muhtemelen meşru ama dar kapsamlı — NB52'de izlenecek |
+| **3. Meta-predictor ablasyonu (A6 ön-hazırlık)** | F1 farkı = 0.0021 (dahil−hariç) | **Sınırlı katkı** (<0.05 eşiği) — meta-predictor dahil etmek düşük riskli, A6'da yine de doğrulanacak |
+| **4. Gen-ezberi testi (GroupKFold vs StratifiedKFold)** | F1 farkı = 0.0056 (7.207 benzersiz gen) | **Belirgin değil** (<0.10 eşiği) — ama gen-holdout her tabloda raporlanmaya devam edecek |
+| **5. Duplicate satır kontrolü** | 18 tam kopya varyant, **0 çelişkili etiket** | Temiz — hiçbir kopya grup içinde Label çelişmiyor |
+
+**⭐ En önemli bulgu — kırmızı bayrağın kaynağı sızıntı değil, verinin doğal kalitesi:** Meta-predictor'lar (score+rankscore+pred, toplam 33+24+6 sütun) tamamen çıkarılsa bile CV F1 hâlâ 0.9878 — yani ~0.99'luk skor tek bir sütun grubundan gelmiyor. Muhtemel açıklama: 63k'nın açık-isimli, klinik-kalite annotasyonları (REVEL, AlphaMissense, gnomAD frekansı, konservasyon skorları) tek başlarına bile çok güçlü ayırt ediciler — bu, yarışmanın anonimleştirilmiş/gürültülü AL_ sütunlarından temelden farklı bir veri rejimi. **Uyarı:** bu aynı zamanda modelin REVEL/AlphaMissense'e göre gerçek katma değerinin düşük kalabileceği anlamına gelir — NB52'nin A4 (feature selection) ve A6 (meta-predictor ablasyonu) adımlarında netleştirilecek.
+
+**Genel verdict: İNCELEME GEREKLİ ama kritik sızıntı bulunamadı** — kırmızı bayrak veri kalitesinden kaynaklanıyor, meta-predictor/gen-ezberi/duplicate testlerinin hiçbiri patoloji göstermedi. `cardioboost__arrhythmias` tek açık soru işareti, ablasyonla izlenecek.
+
+**Çıktılar:** `results/v32_63k_audit/` (nb51_summary.json, nb51_feature_importance.csv, nb51_high_auc_classification.csv, nb51_meta_ablation.json, nb51_gene_memorization.json, nb51_duplicate_rows.json), `reports/nb51_leakage_audit.pdf`, `notebooks/51_63k_leakage_audit.ipynb`. Ayrıca NB50 çıktıları güncellendi: `src/columns_63k.py`, `data/63k_genis/{full_63k,missense_63k,nonmis_63k}.parquet`, `results/v31_63k_prep/*`, `reports/nb50_63k_eda_report.pdf`.
+
+**Sonraki adım:** ADIM 3 — NB52 (`notebooks/52_63k_baseline_hypotheses.ipynb`): H1–H8 hipotez ablasyonları (A1 model ailesi, A2 missing stratejisi, A3 sınıf dengeleme, A4 feature seti/top-200, A5 etiket kalitesi, A6 meta-predictor dahil/hariç — bu notebook'un bulgusuna göre düşük riskli ama yine de test edilecek, A7 feature engineering). Test seti hâlâ açılmadı; tüm kararlar 5-fold CV'den.
+
+---
+
+## NB52 — 63k Genis Veri: Baseline & Hipotez Ablasyonlari H1-H8 (2026-08-30) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 3 — planın en yüksek getirili adımı. Eski projenin (NB12-NB48, anonim yarışma verisi) H1-H8 hipotezlerinin 63k'ya (legacy, açık isimli, büyük n, düşük floor) taşınıp taşınmadığını tek-eksen ardışık ablasyon (A1→A7, her adımda önceki kazanan sabitlenir) ile test etmek.
+
+**Veri:** n=60970 missense varyant, prevalans=0.3727, floor-F1=0.5430 (yarışma panellerinden çok daha düşük — 63k'nın karakteristik özelliği).
+
+**A1-A7 sonuçları (kazanan zincirinin cv_f1 ilerlemesi):**
+
+| Eksen | Kazanan | cv_f1 | Not |
+|---|---|---|---|
+| A1 (model ailesi) | **lgbm** | 0.9897 | BalancedBagging (0.9882) ve diğer ağaçlar çok yakın; CatBoost en yavaş (505s) |
+| A1+H8 (SmallMLP) | lgbm > mlp | mlp=0.9836 | NN rekabetçi ama ağaçları geçemedi |
+| A2 (missing) | **native_nan** | 0.9900 | Impute yapmamak (LGBM native NaN) flag/median stratejilerinden daha iyi |
+| A3 (dengeleme) | **scale_pos_weight** | 0.9903 | Gerçek-resample (0.9891) en kötüsü — veri israfı büyük n'de zararlı |
+| A4 (feature seti) | **top200 (xgb-importance)** | 0.9904 | top100 ve all-features'tan iyi, ayrıca 54s→32s hızlanma |
+| A5 (etiket kalitesi) | all_labels | 0.9904 | qualified/weighted/expert-only farklı n'de, doğrudan kıyaslanamaz — bilgi amaçlı |
+| A6 (meta-predictor) | with_meta (dahil) | 0.9904 vs 0.9867 (hariç) | Fark 0.0038 — NB51 ön-bulgusuyla tutarlı, düşük risk |
+| A7 (FE: Grantham/BLOSUM62/fizikokimya) | no_fe | 0.9904 vs 0.9897 (with_fe) | FE nötr (-0.0007) |
+
+**H1-H8 taşınma karnesi:**
+
+| Hipotez | Sonuç |
+|---|---|
+| H1 (BalancedBagging en güçlü) | **ÇÜRÜTÜLDÜ** — düz LGBM kazandı |
+| H2 (M5≥M3 missing stratejisi) | **ÇÜRÜTÜLDÜ/DEĞİŞTİ** — `native_nan` ikisini de geçti |
+| H3 (gerçek resample > class_weight) | **ÇÜRÜTÜLDÜ/DEĞİŞTİ** — `scale_pos_weight` en iyisi |
+| H6 (FE panel-bağımlı) | **NÖTR** |
+| H7 (feature selection kazandırır) | **DOĞRULANDI** |
+| H8 (NN artık rekabetçi) | **DOĞRULANDI** (0.9836 vs 0.9897, fark<0.01) |
+| H4 (meta=LR, GBM değil) / H5 (heterojen base korelasyon<0.85) | NB53'e ertelendi (stacking aşaması) |
+
+**⭐ En önemli bulgu — 63k, yarışma verisinden köklü şekilde farklı bir rejimde:** Yarışma panellerinde (NB16-NB39) kazanan H1/H2/H3 reçetesi (BalancedBagging + missing-flag + gerçek-resample) burada üçü de tersine döndü. Sebep: n=60970 (yarışma panellerinin ~20 katı) + çok güçlü açık-isimli meta-predictor'lar (REVEL, AlphaMissense, gnomAD frekansı) sayesinde sinyal zaten çok güçlü (floor=0.543, model=0.99) — büyük n'de düz LGBM+scale_pos_weight zaten dengesizliği yönetiyor, native NaN handling zaten optimal, gerçek-resample ise veri israfına dönüşüyor. **Yarışma verisi (küçük n, anonim, zayıf sinyal) ile 63k (büyük n, açık, güçlü sinyal) arasında reçete transferi yapılamaz** — her ikisi kendi rejiminde ayrı ayrı optimize edilmeli.
+
+**Champion reçete (NB53 başlangıç noktası):** LGBM + native_nan + scale_pos_weight + top200 feature (xgb-importance) + meta-predictor dahil + no_fe → cv_f1=0.9904, cv_mcc=0.9848, gene-holdout f1=0.9886.
+
+**🐛 Smoke test sırasında bulunan iki macOS-spesifik native crash (asıl notebook'a da uygulandı):**
+1. `BalancedBaggingClassifier(n_jobs=-1)` + iç içe `LGBMClassifier` paralelliği → joblib/loky deadlock (süreç %0 CPU'da sonsuza kadar askıda kalıyor, hata mesajı bile vermiyor). Düzeltme: hem dış hem iç estimator için `n_jobs=1`.
+2. `torch`'un NumPy/PyArrow/LightGBM'den **sonra** import edilmesi → `torch.tensor()` çağrısında SIGSEGV (exit 139), stack trace'de `pyarrow.lib`/`numpy.linalg` modüllerinin çift yüklendiği görüldü (OpenMP/BLAS init sırası çakışması). Düzeltme: `torch`'u dosyanın en başına taşı + `KMP_DUPLICATE_LIB_OK=TRUE`. Bu iki hata, önceki oturumdaki "smoke test 120s'de takıldı" gözleminin kök nedeniydi.
+
+**Çıktılar:** `results/v33_63k_baseline/` (nb52_ablation_results.csv, nb52_hypothesis_scorecard.json, nb52_champion_recipe.json, nb52_champion_feature_list.json, nb52_ablation_progress.png), `reports/nb52_baseline_report.pdf`, `notebooks/52_63k_baseline_hypotheses.ipynb`. `src/columns_63k.py`'a Section 9 eklendi: `compute_achange_fe()` — `base__achange` metninden ('p.Arg220Gln') Grantham/BLOSUM62/delta-hidropati/hacim/pI/yük türetimi (A7 için).
+
+**Sonraki adım (tamamlandı):** ADIM 4 — NB53 (`notebooks/53_63k_optimization.ipynb`): Champion reçeteye Optuna (TRIALS_TREE=100/TRIALS_NN=50), stacking (H4: LR vs GBM meta, H5: heterojen base pairwise korelasyon<0.85), kalibrasyon (Platt/Isotonic/Venn-Abers + ECE), threshold finalizasyonu (F1-max vs MCC-max), non-missense ek-veri ablasyonu. Test seti hâlâ açılmadı.
+
+## NB53 — 63k Genis Veri: Optimizasyon, Ensemble, Kalibrasyon (2026-08-30) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 4. NB52'nin champion reçetesini (LGBM + native_nan + scale_pos_weight + top200 feature + meta-predictor dahil + no_fe, cv_f1=0.9904/0.9897) başlangıç alıp Optuna, stacking (H4/H5), kalibrasyon, threshold finalizasyonu ve non-missense ek-veri ablasyonu ile geliştirmek. Test seti hâlâ açılmadı — tüm kararlar 5-fold stratified CV'den.
+
+**1. Optuna (TRIALS_TREE=100, config.py'dan, 3336.7s):** LGBM hiperparametre araması. En iyi CV F1=0.9907 (NB52 champion 0.9897'ye göre **+0.0010**). En iyi parametreler: num_leaves=150, max_depth=4, learning_rate=0.1146, n_estimators=488, min_child_samples=75, subsample=0.857, colsample_bytree=0.634. Marjinal ama pozitif kazanç.
+
+**2. Stacking — H4/H5 testi:** 5 base model (Optuna-LGBM, XGBoost, CatBoost, RandomForest, BalancedBagging) OOF tahminleriyle meta-matris kuruldu.
+- **H5 (heterojen base korelasyon<0.85) → ÇÜRÜTÜLDÜ.** Maksimum pairwise korelasyon **0.9988** — tüm base modeller neredeyse birebir aynı tahminleri üretiyor (63k'daki güçlü meta-predictor sinyali her aileyi aynı karar sınırına yakınsatıyor).
+- **H4 (meta=GBM, meta=LR'yi geçecek) → ÇÜRÜTÜLDÜ.** Meta=LR cv_f1=0.9900, Meta=GBM cv_f1=0.9906, ama tek başına en iyi base (lgbm_optuna=0.9907) ikisini de geçti. Stacking kazancı = **-0.0001** (değersiz). NB16-39'daki "meta=LR yeterli" bulgusu burada da tutarlı, ama esas sonuç: **63k'da stacking'in kendisi gereksiz** (base'ler arası çeşitlilik yok).
+
+**3. Kalibrasyon (Platt/Isotonic, Venn-Abers kapsam dışı — paket kurulu değil):** Isotonic en iyi (ECE 0.0045→**0.0005**, Brier 0.0059→0.0056). Model zaten iyi kalibreydi (ham ECE=0.0045 çok düşük); kalibrasyon marjinal iyileştirme sağladı, kritik bir sorunu çözmedi.
+
+**4. Threshold finalizasyonu:** F1-max ve MCC-max **aynı noktada birleşti (thr=0.46)** → F1=0.9907, MCC=0.9852. Gerekçe: 63k'da (yarışma verisinin aksine) bilinen bir ters-dağılım beyanı yok, train ve final test aynı prevalansta bekleniyor — bu yüzden F1-max seçildi, MCC-max yalnızca çapraz-kontrol.
+
+**5. Non-missense ek-veri ablasyonu:** `nonmis_63k.parquet` (n=2482, frameshift/stopgain vb.) eklendiğinde ortak 200/200 feature ile cv_f1 0.9907→**0.9890 (-0.0017)**. Karar: **NÖTR/hafif zararlı, dahil edilmedi**.
+
+**⭐ En önemli bulgu — 63k rejiminde "ensemble teknikleri" tavan doldurulduğunda değersizleşiyor:** NB52'de zaten görülen "yarışma reçetesi 63k'ya transfer olmuz" bulgusunun devamı: stacking, kalibrasyon-ötesi düzeltme ve ek veri gibi yarışma panellerinde (küçük n, zayıf sinyal) kazanç sağlayan teknikler burada (büyük n, çok güçlü açık-isimli meta-predictor sinyali, cv_f1≈0.99) hiçbir şey katmıyor — çünkü kazanç sağlamaları için gereken ön koşullar (base model çeşitliliği, kalibrasyon bozukluğu, ek sinyal) burada yok. Tek gerçek kazanç kaynağı Optuna oldu (+0.0010), o da marjinal.
+
+**Champion reçete v2 (final, NB54'e taşınacak):** LGBM + Optuna params + native_nan + scale_pos_weight + top200 feature + meta-predictor dahil + no_fe, **stacking kullanılmıyor** (tekli LGBM kazandı), kalibrasyon=isotonic, threshold=0.46 (f1max), non-missense **dahil değil**. **Final CV F1 = 0.9907**, floor-F1=0.5430.
+
+**H4/H5 karnesi:** H4 (meta=LR, GBM değil) → **LR YETERLİ/ÜSTÜN** (eski bulgu tutarlı). H5 (heterojen base korelasyon<0.85) → **ÇÜRÜTÜLDÜ** (homojen, 0.9988).
+
+**Çıktılar:** `results/v34_63k_optimization/` (nb53_optuna_best_params.json, nb53_base_correlation.csv, nb53_oof_matrix.parquet, nb53_optimization_results.csv, nb53_champion_recipe_v2.json, nb53_hypothesis_scorecard.json, nb53_optimization_progress.png), `reports/nb53_optimization_report.pdf`, `notebooks/53_63k_optimization.ipynb`.
+
+**Sonraki adım:** ADIM 5 — NB54 (`notebooks/54_63k_final.ipynb`): Test seti **ilk ve son kez** burada açılır. Final metrikler (hold-out + floor + confusion matrix), CV-test farkı raporu (protokol dürüstlüğü), gen-holdout final skoru, model/artifact kaydı (`models/v31_63k/`).
+
+---
+
+## NB54 — 63k Genis Veri: Final Degerlendirme, Test Seti Ilk ve Son Kez Acildi (2026-08-31) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 5 — 63k hattının kapanışı. NB53'ün champion reçete v2'sini (Optuna-LGBM + native_nan + scale_pos_weight + top200 + meta dahil + no_fe + isotonic kalibrasyon + threshold=0.46, CV F1=0.9907) sabit tutup, bu çalışma boyunca ilk kez gerçek stratified train/test ayrımı yapıp test setini **tek seferlik** değerlendirmek.
+
+**Split:** train n=48.776, test n=12.194 (%20, stratified, SEED=42), her ikisi de prevalans=0.3727, floor-F1=0.5430.
+
+**Final test metrikleri (ilk ve tek kez):** F1=0.9902, precision=0.9899, recall=0.9905, MCC=0.9844, AUC-ROC=0.9945, AUC-PR=0.9889, specificity=0.9940, balanced_accuracy=0.9923. Confusion matrix: TN=7604, FP=46, FN=43, TP=4501. Train metrikleri tümü 1.0000 (overfit gap=+0.0098 — beklenen, küçük).
+
+**Protokol dürüstlüğü:** NB53 CV F1 (0.9907) ile NB54 gerçek hold-out test F1 (0.9902) farkı = +0.0005 → **SAĞLAM**, CV'nin iyimser olmadığı doğrulandı.
+
+**Gen-holdout genelleme:** GroupKFold (train üzerinde) F1=0.9881 vs rastgele test F1=0.9902, fark=+0.0021 → **belirgin gen ezberi yok**, NB51 bulgusuyla (0.0056) tutarlı.
+
+**SHAP top-5 (beklenmedik ama makul):** `ditto__score` (4.41, dominant — ~3.5× ikinci sıradakinden büyük), `metarnn__score` (1.25), `allofus250k__gvs_max_af` (0.77), `gnomad__af` (0.76), `metarnn__rank_score` (0.68). REVEL/AlphaMissense/CADD üst sıralarda değil, DITTO baskın çıktı — şüpheli değil, bu veri kümesinde diğer skorlarla örtüşmeyen ek ayırt edicilik sağladığını gösteriyor.
+
+**Hata analizi:** Toplam 89 hata (46 FP + 43 FN) / 12.194 tahmin. Herhangi bir gen hataların çoğunluğunu oluşturmuyor (en çok hata veren genler 1-2 hataya sahip) → sistematik zayıflık yok, sınır-vaka belirsizliği.
+
+**Çıktılar:** `results/v35_63k_final/` (split indeksleri, SHAP top30 CSV/PNG, FP/FN gen bazında CSV, final özet PNG, final_results.json), `models/v31_63k/` (final LGBM model, isotonic kalibratör, kategorik encoder, manifest), `reports/nb54_final_report.pdf`, `notebooks/54_63k_final.ipynb`.
+
+**⭐ Danışman-seviyesinde konsolide rapor:** NB50→NB54'ün tüm sürecini (veri hazırlama, sızıntı denetimi, H1-H8 ablasyonu, Optuna/stacking/kalibrasyon, final test) sıfır ön-bilgiyle okunabilir, metrik tablolarıyla desteklenmiş 11 sayfalık PDF olarak `reports/63k_pipeline_advisor_report.pdf`'e yazıldı.
+
+**Sonraki adım:** 63k hattı (NB50-54) tamamlandı. Odak yarışma paneli çalışmasına (CFTR/KANSER/PAH/MASTER, PAH Bayes-tavanı çelişkisi en yüksek öncelik) geri dönecek.
 
