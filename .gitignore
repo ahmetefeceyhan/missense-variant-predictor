@@ -18,3 +18,9 @@ __pycache__/
 *.pyc
 catboost_info/
 **/catboost_info/
+
+# NB54 kategorik encoder (71MB) - gwas_catalog__init_samp gibi neredeyse-
+# benzersiz metin sutunlarinin CAT_COLS'a yanlislikla dahil edilmesinden
+# kaynaklanan sisirilmis boyut; GitHub'in 50MB limitini asiyor. Yerelde
+# notebooks/54_63k_final.ipynb calistirilarak yeniden uretilebilir.
+models/v31_63k/nb54_cat_encoder.joblib

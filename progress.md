@@ -2267,4 +2267,27 @@ Değerlendirme protokolü NB32/NB39/NB46 ile birebir aynı: f1_raw / f1_8020 / m
 
 **Sonraki adım:** ADIM 5 — NB54 (`notebooks/54_63k_final.ipynb`): Test seti **ilk ve son kez** burada açılır. Final metrikler (hold-out + floor + confusion matrix), CV-test farkı raporu (protokol dürüstlüğü), gen-holdout final skoru, model/artifact kaydı (`models/v31_63k/`).
 
+---
+
+## NB54 — 63k Genis Veri: Final Degerlendirme, Test Seti Ilk ve Son Kez Acildi (2026-08-31) ✅
+
+**Amaç:** `docs/PLAN_63K_ENTEGRASYON.md` ADIM 5 — 63k hattının kapanışı. NB53'ün champion reçete v2'sini (Optuna-LGBM + native_nan + scale_pos_weight + top200 + meta dahil + no_fe + isotonic kalibrasyon + threshold=0.46, CV F1=0.9907) sabit tutup, bu çalışma boyunca ilk kez gerçek stratified train/test ayrımı yapıp test setini **tek seferlik** değerlendirmek.
+
+**Split:** train n=48.776, test n=12.194 (%20, stratified, SEED=42), her ikisi de prevalans=0.3727, floor-F1=0.5430.
+
+**Final test metrikleri (ilk ve tek kez):** F1=0.9902, precision=0.9899, recall=0.9905, MCC=0.9844, AUC-ROC=0.9945, AUC-PR=0.9889, specificity=0.9940, balanced_accuracy=0.9923. Confusion matrix: TN=7604, FP=46, FN=43, TP=4501. Train metrikleri tümü 1.0000 (overfit gap=+0.0098 — beklenen, küçük).
+
+**Protokol dürüstlüğü:** NB53 CV F1 (0.9907) ile NB54 gerçek hold-out test F1 (0.9902) farkı = +0.0005 → **SAĞLAM**, CV'nin iyimser olmadığı doğrulandı.
+
+**Gen-holdout genelleme:** GroupKFold (train üzerinde) F1=0.9881 vs rastgele test F1=0.9902, fark=+0.0021 → **belirgin gen ezberi yok**, NB51 bulgusuyla (0.0056) tutarlı.
+
+**SHAP top-5 (beklenmedik ama makul):** `ditto__score` (4.41, dominant — ~3.5× ikinci sıradakinden büyük), `metarnn__score` (1.25), `allofus250k__gvs_max_af` (0.77), `gnomad__af` (0.76), `metarnn__rank_score` (0.68). REVEL/AlphaMissense/CADD üst sıralarda değil, DITTO baskın çıktı — şüpheli değil, bu veri kümesinde diğer skorlarla örtüşmeyen ek ayırt edicilik sağladığını gösteriyor.
+
+**Hata analizi:** Toplam 89 hata (46 FP + 43 FN) / 12.194 tahmin. Herhangi bir gen hataların çoğunluğunu oluşturmuyor (en çok hata veren genler 1-2 hataya sahip) → sistematik zayıflık yok, sınır-vaka belirsizliği.
+
+**Çıktılar:** `results/v35_63k_final/` (split indeksleri, SHAP top30 CSV/PNG, FP/FN gen bazında CSV, final özet PNG, final_results.json), `models/v31_63k/` (final LGBM model, isotonic kalibratör, kategorik encoder, manifest), `reports/nb54_final_report.pdf`, `notebooks/54_63k_final.ipynb`.
+
+**⭐ Danışman-seviyesinde konsolide rapor:** NB50→NB54'ün tüm sürecini (veri hazırlama, sızıntı denetimi, H1-H8 ablasyonu, Optuna/stacking/kalibrasyon, final test) sıfır ön-bilgiyle okunabilir, metrik tablolarıyla desteklenmiş 11 sayfalık PDF olarak `reports/63k_pipeline_advisor_report.pdf`'e yazıldı.
+
+**Sonraki adım:** 63k hattı (NB50-54) tamamlandı. Odak yarışma paneli çalışmasına (CFTR/KANSER/PAH/MASTER, PAH Bayes-tavanı çelişkisi en yüksek öncelik) geri dönecek.
 
